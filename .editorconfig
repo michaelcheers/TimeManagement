@@ -1,0 +1,4 @@
+﻿[*.cs]
+
+# CS0824: Constructor is marked external
+dotnet_diagnostic.CS0824.severity = none
