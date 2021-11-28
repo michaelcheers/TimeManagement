@@ -9,8 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Bridge" Version="17.10.1" />
     <PackageReference Include="Bridge.Html5" Version="17.10.0" />
-    <PackageReference Include="Bridge.React" Version="5.2.0" />
-    <PackageReference Include="Bridge.ReactLoader" Version="16.4.2" />
+    <PackageReference Include="Bridge.Newtonsoft.Json" Version="1.17.0" />
   </ItemGroup>
 
 </Project>

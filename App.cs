@@ -1,6 +1,6 @@
 ﻿using Bridge;
 using Bridge.Html5;
-using Bridge.React;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,12 +9,11 @@ using System.Text.RegularExpressions;
 namespace TimeManagement
 {
     using static App;
-    using static TimerButtonAndContainerMethods;
 
     public static class Extensions
     {
-        //[Template("((e, c) => c.appendChild(e), c)({element}, {containingElem})")]
-        //public static extern T AddTo<T> (this Node element, T containingElem) where T : Node;
+        [Template("((e, c) => c.appendChild(e))({element}, {containingElem})")]
+        public static extern T AddTo<T>(this T element, Node containingElem) where T : Node;
         public static T AddToBody<T> (this T n) where T : Node => App.root.AppendChild<T>(n);
         [Template("{node}.appendChild({element})")]
         public static extern T AppendChild<T> (this Node node, T element) where T : Node;
@@ -25,11 +24,13 @@ namespace TimeManagement
         [Template("(li => (li.appendChild({element}), li))(document.createElement('li'))")]
         public static extern HTMLLIElement WrapLi (this Node element);
         [Template("(div => (div.appendChild({element}), div))(document.createElement('div'))")]
-        public static extern HTMLLIElement WrapDiv(this Node element);
+        public static extern HTMLDivElement WrapDiv(this Node element);
         public static T Add<T>(this T element, params Union<Node, string>[] nodes) where T : Node
         {
             foreach (Union<Node, string> node in nodes)
-                if (node.Is<string>())
+                if (node == null)
+                    continue;
+                else if (node.Is<string>())
                     element.AppendChild(new Text(node.As<string>()));
                 else
                     element.AppendChild(node.As<Node>());
@@ -53,10 +54,10 @@ namespace TimeManagement
             @"([a-z])([^_a-z])", "$1 $2");
         public static string ToCamelString<T>(this T e) where T : struct, Enum =>
             e.ToString().AddCamelSpace().Replace('_', ' ');
-        public static HTMLSelectElement AddEnum<T>(this HTMLSelectElement select, T? defaultValue = null) where T : struct, Enum
+        public static HTMLSelectElement AddEnum<T>(this HTMLSelectElement select, T? defaultValue = null, string defaultValueString = "") where T : struct, Enum
         {
             if (defaultValue == null)
-                select.Add(new HTMLOptionElement { Value = "", Selected = true, Disable = true });
+                select.Add(new HTMLOptionElement { Value = "", Selected = true, Disable = true }.Add(defaultValueString));
             foreach (T value in Enum.GetValues(typeof(T)))
                 select.Add(new HTMLOptionElement
                 {
@@ -65,84 +66,215 @@ namespace TimeManagement
                 }.Add(value.ToCamelString()));
             return select;
         }
-        public static T Value<T> (this HTMLSelectElement select) where T : struct, Enum => (T)(object)int.Parse(select.Value);
+        public static T? Value<T> (this HTMLSelectElement select) where T : struct, Enum => select.Value == "" ? null : (T?)(T)(object)int.Parse(select.Value);
+        public static HTMLSelectElement SetValue<T> (this HTMLSelectElement select, T value) where T : struct, Enum
+        {
+            select.Value = ((int)(object)value).ToString();
+            return select;
+        }
+        public static string ToTimeString (this TimeSpan time) => time.ToString(time >= TimeSpan.FromHours(1) ? @"h\:mm\:ss" : @"m\:ss");
+        [Template("(e => (e.setCustomValidity({message}), e.reportValidity(), e))({element})")]
+        public static extern T SetCustomValidity<T> (this T element, string message) where T : HTMLElement;
+        [Template("(e => (e.setAttribute('list', {datalistID}), e))({element})")]
+        public static extern HTMLInputElement SetDataList (this HTMLInputElement element, string datalistID);
+        //[Template("{elem}.appendChild({adding})")]
+        //public static extern T Append<T> (this Node elem, T adding);
+
+        public static Union<Node, string>[] JoinBR (this IEnumerable<string> strings)
+        {
+            IEnumerable<Union<Node, string>> Inner ()
+            {
+                using (var enumer = strings.GetEnumerator())
+                {
+                    if (!enumer.MoveNext()) yield break;
+                    yield return enumer.Current;
+                    while (enumer.MoveNext())
+                    {
+                        yield return new HTMLBRElement();
+                        yield return enumer.Current;
+                    }
+                }
+            }
+            return Inner().ToArray();
+        }
     }
     public static class Enumerable
     {
+        public static IEnumerable<T> Prepend<T>(this IEnumerable<T> arr, T value) => new[] { value }.Concat(arr);
         public static T[] Append<T>(this IEnumerable<T> arr, T value) => arr.Concat(new[] { value }).ToArray();
+
+        public static IEnumerable<(T, T2)> Zip<T, T2> (this IEnumerable<T> e_a, IEnumerable<T2> e_b) => e_a.Zip(e_b, (a, b) => (a, b));
     }
 
-    public static class TimerButtonAndContainerMethods
+    public class Timer
     {
-        public static bool GetIsPaused (double[] state) => state.Length % 2 == 0;
-        public static TimeSpan GetElapsedTime (double[] state)
+        public double[] times = new double[0];
+        public HTMLDivElement Element;
+        public int? interval;
+
+        public Timer(HTMLDivElement slot = null)
         {
-            double[] arr = state.Length % 2 == 1 ? state.Append(Date.Now()) : state;
-            double finalTime = 0;
-            for (int n = 0; n < arr.Length; n += 2)
-                finalTime += arr[n + 1] - arr[n];
-            return TimeSpan.FromMilliseconds(finalTime);
+            Element = slot ?? new HTMLDivElement();
+            Rerender();
         }
-    }
 
-    public class TimerButton : StatelessComponent<(Action<double[]> onChange, double[] state)>
-    {
-        public TimerButton((Action<double[]> onChange, double[] state) props, params Union<ReactElement, string>[] children) : base(props, children) { }
-
-        public override ReactElement Render() => DOM.Button(new ButtonAttributes
+        public bool IsPaused => times.Length % 2 == 0;
+        public TimeSpan TimeElapsed
+        {
+            get
             {
-                OnClick = e => props.onChange(props.state.Append(Date.Now()))
-            }, props.state.Length == 0 ? "Start" : props.state.Length % 2 == 0 ? "Resume" : "Pause");
-    }
+                double[] arr = IsPaused ? times : times.Append(Date.Now());
+                double finalTime = 0;
+                for (int n = 0; n < arr.Length; n += 2)
+                    finalTime += arr[n + 1] - arr[n];
+                return TimeSpan.FromMilliseconds(finalTime);
+            }
+        }
+        public string TimeElapsedString => TimeElapsed.ToTimeString();
 
-    public class TimerButtonWithTime : Component<(Action<double[]> onChange, double[] state), string>
-    {
-        public TimerButtonWithTime((Action<double[]> onChange, double[] state) props, params Union<ReactElement, string>[] children) : base(props, children) { }
+        public HTMLButtonElement btn;
+        public HTMLInputElement timeIndicator;
 
-        public string ElapsedTime => GetElapsedTime(props.state).ToString(@"m\:ss");
-
-        protected override string GetInitialState() => ElapsedTime;
-
-        public int? TimerID;
-
-        protected override void ComponentDidMount() =>
-            TimerID = Global.SetInterval(() => SetState(ElapsedTime), 1000);
-
-        protected override void ComponentWillUnmount()
+        public void Rerender()
         {
-            if (TimerID is int id) Global.ClearInterval(id);
+            Element.InnerHTML = "";
+            Element.Add(btn = new HTMLButtonElement
+            {
+                OnClick = _ =>
+                {
+                    times = times.Append(Date.Now());
+                    Update();
+                    if (interval is int i) Global.ClearInterval(i);
+                    if (!IsPaused) interval = Global.SetInterval(Update, 1000);
+                    timeIndicator.Disabled = !IsPaused;
+                }
+            });
+            Element.Add(" (", timeIndicator = new HTMLInputElement
+            {
+                Style = { Width = "4em" },
+                OnChange = e =>
+                {
+                    if (TryParseTimeSpan(e.CurrentTarget.Value, out TimeSpan ts))
+                        times = new[] { Date.Now() - ts.TotalMilliseconds, Date.Now() };
+                }   
+            }, ")");
+            Update();
         }
 
-        public override ReactElement Render() => DOM.Div(new Attributes(),
-            new TimerButton(props), 
-            $" ({ElapsedTime})"
-        );
+        public void Update()
+        {
+            btn.InnerHTML = "";
+            btn.Add(times.Length == 0 ? "Start" : IsPaused ? "Resume" : "Pause");
+            timeIndicator.InnerHTML = "";
+            timeIndicator.Value = TimeElapsedString;
+        }
     }
 
-    public class TimerButtonContainer : Component<object, double[]>
+    public class LabelList
     {
-        public TimerButtonContainer(object props = null, params Union<ReactElement, string>[] children) : base(props, children) { }
+        public HTMLDivElement Element;
+        public HTMLFormElement Form;
+        public HTMLButtonElement SubmitButton;
+        public HTMLInputElement LabelInput;
+        public HTMLUListElement LabelsUL;
 
-        protected override double[] GetInitialState() => new double[0];
+        public List<string> Labels = new List<string>();
+        public bool Flexible;
 
-        public override ReactElement Render() => new TimerButtonWithTime((s => SetState(s), state));
-        public HTMLDivElement AsElement()
+        public Action OnLabelListChange;
+
+        public LabelList(bool flexible, HTMLDivElement slot = null)
         {
-            HTMLDivElement result = new HTMLDivElement();
-            React.Render(this, result);
-            return result;
+            Flexible = flexible;
+            Element = slot ?? new HTMLDivElement();
+            Rerender();
+            LabelListChange();
         }
 
-        public bool IsPaused => GetIsPaused(state);
-        public TimeSpan TimeElapsed => GetElapsedTime(state);
+        public void Rerender ()
+        {
+            Element.InnerHTML = "";
+            LabelsUL = new HTMLUListElement().AddTo(Element);
+            Form = new HTMLFormElement
+            {
+                OnSubmit = e =>
+                {
+                    e.PreventDefault();
+
+                    string adding = LabelInput.Value;
+                    Labels.Add(adding);
+                    LabelsUL.InsertBefore(
+                        new HTMLLIElement
+                        {
+                            Style = { Cursor = Cursor.Pointer },
+                            OnClick = _ =>
+                            {
+                                LabelsUL.RemoveChild(_.Target);
+                                Labels.Remove(adding);
+                                LabelListChange();
+                            }
+                        }.Add(adding),
+                        LabelsUL.LastElementChild
+                    );
+                    LabelInput.Value = "";
+                    LabelInput.Focus();
+                    LabelListChange();
+                }
+            };
+            LabelInput =
+                (Flexible
+                    ? new HTMLInputElement { Required = true }.SetDataList(labelListID)
+                    : new HTMLSelectElement { Required = true, OnInput = _ => SubmitButton.Click() }.As<HTMLInputElement>()
+                ).AddTo(Form);
+            SubmitButton = new HTMLButtonElement().Add("+").AddTo(Form);
+            LabelsUL.Add(new HTMLLIElement().Add(Form));
+            var labels = Labels;
+            Labels = new List<string>();
+            foreach (string label in labels)
+            {
+                LabelInput.Value = label;
+                SubmitButton.Click();
+            }
+        }
+
+        public void LabelListChange ()
+        {
+            if (Flexible) return;
+            string fll = LabelInput.Value;
+            try
+            {
+                LabelInput.InnerHTML = "";
+                foreach (string label in App.Labels.Except(this.Labels).OrderBy(l => l))
+                    LabelInput.Add(new HTMLOptionElement { Value = label }.Add(label));
+                if (this.Labels.RemoveAll(label => !App.Labels.Contains(label)) == 0) return;
+                Rerender();
+            }
+            finally
+            {
+                LabelInput.Value = fll;
+                OnLabelListChange?.Invoke();
+            }
+        }
     }
 
     public static class MenuElementExtensions
     {
         public static HideableElement Show(this HideableElement me)
         {
-            MenuElements.ForEach(m => m.Hide());
+            MenuElements.ForEach(m => ((HTMLElement)m).Hide());
+            menu.Hide();
+            editButtons = false;
+            UpdateTaskList();
             return Extensions.Show(me);
+        }
+
+        public static HideableElement Hide (this HideableElement me)
+        {
+            ((HTMLElement)me).Hide();
+            menu.Show();
+            editButtons = true;
+            UpdateTaskList();
+            return me;
         }
     }
 
@@ -158,15 +290,122 @@ namespace TimeManagement
         }
     }
 
+    public class Assigner<T>
+    {
+        public Assigner(T v) => Value = v;
+        public T Value { get; }
+    }
+
+    public class AddTaskUI
+    {
+        private AddTaskUI() { }
+
+        public Action<Task> Edit;
+        public void New() => Edit(null);
+
+        public static AddTaskUI Init()
+        {
+
+            HTMLInputElement taskName = new HTMLInputElement();
+            Timer playPauseButton = new Timer();
+            HTMLInputElement moneyAmount = new HTMLInputElement { Type = InputType.Number, Style = { Width = "5em", TextAlign = TextAlign.Right }, Placeholder = "130" };
+            HTMLSelectElement currency = new HTMLSelectElement().AddEnum<Currency>(Currency.CAD);
+            HTMLSelectElement status = new HTMLSelectElement()
+                .AddElement(new HTMLOptionElement { Value = "False" }.Add("In Progress"))
+                .AddElement(new HTMLOptionElement { Value = "True" }.Add("Complete"));
+            LabelList labelList = new LabelList(flexible: true);
+
+            Task editing = null;
+            void AddTask()
+            {
+                if (!playPauseButton.IsPaused)
+                {
+                    playPauseButton.btn.SetCustomValidity("The timer is not paused.");
+                    return;
+                }
+                if (labelList.LabelInput.Value != "")
+                {
+                    labelList.SubmitButton.SetCustomValidity("There is an unadded label");
+                    return;
+                }
+                Task newTask = new Assigner<Task>(editing ?? new Task())
+                {
+                    Value =
+                    {
+                        TaskName = taskName.Value,
+                        TimeSoFar = playPauseButton.TimeElapsed,
+                        MoneyAmount = decimal.TryParse(moneyAmount.ValueAsNumber.ToString(), out decimal d) ? (decimal?)d : null,
+                        MoneyCurrency = currency.Value<Currency>().Value,
+                        IsComplete = bool.Parse(status.Value),
+                        Labels = labelList.Labels,
+                        TimeModified = Date.Now()
+                    }
+                }.Value;
+                if (newTask.TimeSoFar.Ticks > 0) newTask.TimeStarted = newTask.TimeModified;
+                if (editing == null)
+                {
+                    newTask.TimeCreated = newTask.TimeModified;
+                    Tasks.Add(newTask);
+                }
+                TasksEdited();
+                addTask.Hide();
+            }
+            HTMLHeadingElement heading = new HTMLHeadingElement(HeadingType.H1);
+            HTMLButtonElement submitButton = new HTMLButtonElement { OnClick = e => AddTask() };
+            addTask = HideableElement.Create()
+                .Add(new HTMLAnchorElement { Href = "javascript:void(0)", OnClick = _ => addTask.Hide() }.Add("Close"))
+                .Add(heading)
+                .AddUl(
+                    new Union<Node, string>[] { "Task: ", taskName },
+                    playPauseButton.Element,
+                    new Union<Node, string>[] { "Money: ", moneyAmount, " ", currency },
+                    new Union<Node, string>[] { "Status: ", status },
+                    new Union<Node, string>[] { "Labels: ", labelList.Element},
+                    submitButton
+                );
+            void Edit(Task t)
+            {
+                heading.InnerHTML = "";
+                heading.Add(t is Task ? "Edit a Task" : "Add a Task");
+                submitButton.InnerHTML = "";
+                submitButton.Add(t is Task ? "Edit Task" : "Add Task");
+                t = (editing = t) ?? new Task { TaskName = "" };
+                taskName.Value = t.TaskName;
+                playPauseButton.times = t.TimeSoFar.Ticks == 0
+                    ? new double[0]
+                    : new double[] { Date.Now() - t.TimeSoFar.TotalMilliseconds, Date.Now() };
+                playPauseButton.Update();
+                if (t.MoneyAmount is decimal amount)
+                    moneyAmount.ValueAsNumber = (double)amount;
+                else
+                    moneyAmount.Value = "";
+                currency.SetValue(t.MoneyCurrency);
+                status.Value = t.IsComplete.ToString();
+                labelList.Labels = t.Labels;
+                labelList.Rerender();
+                addTask.Show();
+            }
+            return new AddTaskUI { Edit = Edit };
+        }
+    }
+
     public static class App
     {
         public static HTMLDivElement root;
         public static List<HideableElement> MenuElements = new List<HideableElement>();
         public static List<Task> Tasks = new List<Task>();
+        public static List<string> Labels = new List<string>();
+        public static HTMLDataListElement labelList;
+        public static LabelList filterLabelList;
+        public static HTMLSelectElement filterTaskStatus;
+        public const string labelListID = "labelList";
+        public static bool editButtons;
 
         public static HTMLDivElement menu;
-        public static HideableElement newTask;
+        public static HideableElement addTask;
         public static HTMLDivElement taskListSlot;
+
+        public static AddTaskUI addTaskUI;
 
         public static Dictionary<Currency, decimal> InCAD = new Dictionary<Currency, decimal>
         {
@@ -175,43 +414,41 @@ namespace TimeManagement
             [Currency.EUR] = 1.44870m /* (actual exchange rate from November 27, 2021) */ - 0.05m
         };
 
-        static HideableElement NewTask()
+        public static bool TryParseTimeSpan (string time, out TimeSpan outValue)
         {
-            HTMLInputElement taskName = new HTMLInputElement();
-            TimerButtonContainer playPauseButton = new TimerButtonContainer();
-            HTMLInputElement moneyAmount = new HTMLInputElement { Type = InputType.Number, Style = { Width = "5em", TextAlign = TextAlign.Right }, Placeholder = "130" };
-            HTMLSelectElement currency = new HTMLSelectElement().AddEnum<Currency>(Currency.CAD);
-            HTMLSelectElement status = new HTMLSelectElement()
-                .AddElement(new HTMLOptionElement { Value = "False" }.Add("In Progress"))
-                .AddElement(new HTMLOptionElement { Value = "True" }.Add("Complete"));
-            void AddTask()
+            outValue = TimeSpan.Zero;
+            string[] split = time.Split(':');
+            split.Reverse();
+            List<int> splitParsed = new List<int>();
+            foreach (string s in split)
             {
-                if (!playPauseButton.IsPaused)
-                {
-                    Global.Alert("The play/pause button must be paused before adding a task.");
-                    return;
-                }
-                Tasks.Add(new Task
-                {
-                    TaskName = taskName.Value,
-                    TimeSoFar = playPauseButton.TimeElapsed,
-                    MoneyAmount = decimal.TryParse(moneyAmount.ValueAsNumber.ToString(), out decimal d) ? (decimal?)d : null,
-                    MoneyCurrency = currency.Value<Currency>(),
-                    IsComplete = bool.Parse(status.Value)
-                });
-                UpdateTaskList();
+                if (!int.TryParse(s, out int p)) return false;
+                splitParsed.Add(p);
             }
-            HTMLButtonElement submitButton = new HTMLButtonElement { OnClick = e => AddTask() }.AddDiv("Add Task");
-            return HideableElement.Create()
-                .Add(new HTMLHeadingElement(HeadingType.H1).Add("Add a Task"))
-                .AddUl(
-                    new Union<Node, string>[] { "Task: ", taskName },
-                    playPauseButton.AsElement(),
-                    new Union<Node, string>[] { "Money: ", moneyAmount, " ", currency },
-                    new Union<Node, string>[] { "Status: ", status },
-                    submitButton
-                );
+            outValue = TimeSpan.FromSeconds(
+                splitParsed.Zip(
+                    new[] { 1, 60, 60 * 60 },
+                    (p, mul) => p * mul
+                ).Sum()
+            );
+            return true;
         }
+
+        public static void TasksEdited ()
+        {
+            Global.LocalStorage.SetItem("tasks", JsonConvert.SerializeObject(Tasks));
+            UpdateLabels();
+            filterLabelList.LabelListChange();
+        }
+
+        public static void UpdateLabels()
+        {
+            Labels = Tasks.SelectMany(t => t.Labels).Distinct().ToList();
+            labelList.InnerHTML = "";
+            foreach (string label in Labels.OrderBy(l => l))
+                labelList.Add(new HTMLOptionElement { Value = label });
+        }
+
         static HTMLDivElement TaskList()
         {
             HTMLDivElement div = new HTMLDivElement();
@@ -221,19 +458,37 @@ namespace TimeManagement
                     .Add(new HTMLTableHeaderCellElement().Add("Time So Far"))
                     .Add(new HTMLTableHeaderCellElement().Add("Money (CAD)"))
                     .Add(new HTMLTableHeaderCellElement().Add("Task Status"))
-                );
-            foreach (Task task in Tasks)
+                    .Add(new HTMLTableHeaderCellElement().Add("Labels"))
+                    .Add(editButtons ? new HTMLTableHeaderCellElement().Add("Edit") : null)
+                    .Add(new HTMLTableHeaderCellElement().Add("$/hour"))
+                ).AddTo(div);
+            IEnumerable<Task> tasks = Tasks;
+            if (filterLabelList.Labels.Count > 0)
+                tasks = tasks.Where(t => t.Labels.Any(filterLabelList.Labels.Contains));
+            if (filterTaskStatus.Value<TaskState>() is TaskState taskState)
+                tasks = tasks.Where(t => t.State == taskState);
+            foreach (Task task in tasks)
             {
                 table.Add(new HTMLTableRowElement()
                     .Add(new HTMLTableDataCellElement().Add(task.TaskName))
-                    .Add(new HTMLTableDataCellElement().Add(task.TimeSoFar.ToString()))
+                    .Add(new HTMLTableDataCellElement().Add(task.TimeSoFar.ToTimeString()))
                     .Add(
                         new HTMLTableDataCellElement
                         {
                             Title = task.MoneyAmount is decimal amount ? $"{amount} {task.MoneyCurrency}" : ""
-                        }.Add(task.MoneyAmount is decimal amount_ ? (amount_ * InCAD[task.MoneyCurrency]).ToString("$0.00") : "")
+                        }.Add(task.MoneyAmount is decimal amount_ ? (amount_ * InCAD[task.MoneyCurrency]).ToString("0") : "")
                     )
-                    .Add(new HTMLTableDataCellElement().Add(task.TimeSoFar.Ticks == 0 ? "Not Started" : task.IsComplete ? "Complete" : "In Progress"))
+                    .Add(new HTMLTableDataCellElement().Add(task.State.ToCamelString()))
+                    .Add(new HTMLTableDataCellElement { Style = { TextAlign = TextAlign.Left } }.Add(task.Labels.JoinBR()))
+                    .Add(editButtons ? new HTMLTableDataCellElement().Add(new HTMLAnchorElement
+                    {
+                        Href = "javascript:void(0)",
+                        OnClick = _ => addTaskUI.Edit(task)
+                    }.Add("Edit")) : null)
+                    .Add(new HTMLTableDataCellElement().Add(
+                        task.MoneyAmount is decimal money && task.TimeSoFar.Ticks > 0 && task.IsComplete
+                            ? ((double)(money * InCAD[task.MoneyCurrency]) / task.TimeSoFar.TotalHours).ToString("0")
+                            : ""))
                 );
             }
             return div;
@@ -245,22 +500,112 @@ namespace TimeManagement
             taskListSlot.Add(TaskList());
         }
 
+        [Script(@"
+    var processRow = function (row) {
+        var finalVal = '';
+        for (var j = 0; j < row.length; j++) {
+            var innerValue = row[j] === null ? '' : row[j].toString();
+            if (row[j] instanceof Date) {
+                innerValue = row[j].toLocaleString();
+            };
+            var result = innerValue.replace(/""/g, '""""');
+            if (result.search(/(""|,|\n)/g) >= 0)
+                result = '""' + result + '""';
+            if (j > 0)
+                finalVal += ',';
+            finalVal += result;
+        }
+        return finalVal + '\n';
+    };
+
+    var csvFile = '';
+    for (var i = 0; i < rows.length; i++) {
+        csvFile += processRow(rows[i]);
+    }
+
+    var blob = new Blob([csvFile], { type: 'text/csv;charset=utf-8;' });
+    if (navigator.msSaveBlob) { // IE 10+
+        navigator.msSaveBlob(blob, fileName);
+    } else {
+        var link = document.createElement(""a"");
+        if (link.download !== undefined) { // feature detection
+            // Browsers that support HTML5 download attribute
+            var url = URL.createObjectURL(blob);
+            link.setAttribute(""href"", url);
+            link.setAttribute(""download"", fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }")]
+        public static extern void ExportToCSV(string fileName, string[][] rows);
+
         public static void Main ()
         {
+            Document.Head.AppendChild(new HTMLStyleElement().Add("th, td { text-align:center; border: 1px solid black }"));
+
+            labelList = new HTMLDataListElement { Id = labelListID }.AddTo(Document.Body);
+            if (Global.LocalStorage.GetItem("tasks") is string serialized)
+                Tasks = JsonConvert.DeserializeObject<List<Task>>(serialized);
+            UpdateLabels();
+
             HTMLDivElement Menu() =>
                 new HTMLDivElement().AddUl(
                     new HTMLAnchorElement
                     {
                         Href = "javascript:void(0)",
-                        OnClick = _ => newTask.Show()
-                    }.Add("New Task")
+                        OnClick = _ =>
+                        {
+                            addTaskUI.New();
+                            addTask.Show();
+                        }
+                    }.Add("+ New Task")
                 );
 
             root = Document.Body.AppendChild<HTMLDivElement>(new HTMLDivElement());
             menu = Menu().AddToBody();
-            newTask = NewTask();
+            addTaskUI = AddTaskUI.Init();
+            new HTMLFieldSetElement()
+                .Add(new HTMLLegendElement().Add("Filters"))
+                .AddUl(
+                    new Union<Node, string>[]
+                    {
+                        "Labels:",
+                        (filterLabelList = new LabelList(flexible: false){ OnLabelListChange = UpdateTaskList }).Element
+                    },
+                    new Union<Node, string>[]
+                    {
+                        "Task Status: ",
+                        filterTaskStatus = new HTMLSelectElement().AddEnum<TaskState>(defaultValueString: "Any")
+                    }
+                )
+                .AddToBody();
+            new HTMLBRElement().AddToBody();
+
             taskListSlot = new HTMLDivElement().AddToBody();
+            editButtons = true;
             UpdateTaskList();
+
+            new HTMLBRElement().AddToBody();
+            new HTMLAnchorElement
+            {
+                Href = "javascript:void(0)",
+                OnClick = _ =>
+                {
+                    ExportToCSV($"Time Information ({DateTime.Now:MMMM d, yyyy}).csv", Tasks.Select((t, i) =>
+                        new string[]
+                        {
+                            t.TaskName,
+                            t.TimeSoFar.TotalHours.ToString(),
+                            (t.MoneyAmount * InCAD[t.MoneyCurrency]).ToString(),
+                            t.State.ToCamelString(),
+                            string.Join("\n", t.Labels),
+                            $"=$C{i + 2}/$B{i + 2}"
+                        }
+                    ).Prepend(new[] { "Task Name", "Hours Spent", "Money (CAD)", "Task Status", "Labels", "$/hour" }).ToArray());
+                }
+            }.Add("CSV Export").AddToBody();
         }
     }
 
@@ -273,6 +618,9 @@ namespace TimeManagement
         public bool IsComplete;
         public decimal? MoneyAmount;
         public Currency MoneyCurrency;
+        public double TimeCreated;
+        public double? TimeStarted;
+        public double TimeModified;
         public List<string> Labels = new List<string>();
 
         public TaskState State => IsComplete ? TaskState.Complete : TimeSoFar.Ticks == 0 ? TaskState.Planned : TaskState.Started;
