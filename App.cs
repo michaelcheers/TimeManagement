@@ -577,7 +577,7 @@ namespace TimeManagement
                     new Union<Node, string>[]
                     {
                         "Task Status: ",
-                        filterTaskStatus = new HTMLSelectElement().AddEnum<TaskState>(defaultValueString: "Any")
+                        filterTaskStatus = new HTMLSelectElement { OnInput = _ => UpdateTaskList() }.AddEnum<TaskState>(defaultValueString: "Any")
                     }
                 )
                 .AddToBody();
