@@ -108,8 +108,6 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
             var $t, $t1, $t2;
             var Menu = null;
             document.head.appendChild(TimeManagement.Extensions.Add(HTMLStyleElement, document.createElement("style"), ["th, td { text-align:center; border: 1px solid black }"]));
-
-            TimeManagement.App.labelList = ((e, c) => c.appendChild(e))(($t = document.createElement("datalist"), $t.id = TimeManagement.App.labelListID, $t), document.body);
             var serialized;
             if (((serialized = Bridge.as(Bridge.global.localStorage.getItem("tasks"), System.String))) != null) {
                 TimeManagement.App.Tasks = Newtonsoft.Json.JsonConvert.DeserializeObject(serialized, System.Collections.Generic.List$1(TimeManagement.Task));
@@ -138,7 +136,6 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                 MenuElements: null,
                 Tasks: null,
                 Labels: null,
-                labelList: null,
                 filterLabelList: null,
                 filterTaskStatus: null,
                 editButtons: false,
@@ -147,6 +144,9 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                 taskListSlot: null,
                 addTaskUI: null,
                 InCAD: null
+            },
+            events: {
+                LabelListChange: null
             },
             ctors: {
                 init: function () {
@@ -185,23 +185,10 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                 TasksEdited: function () {
                     Bridge.global.localStorage.setItem("tasks", Newtonsoft.Json.JsonConvert.SerializeObject(TimeManagement.App.Tasks));
                     TimeManagement.App.UpdateLabels();
-                    TimeManagement.App.filterLabelList.LabelListChange();
+                    !Bridge.staticEquals(TimeManagement.App.LabelListChange, null) ? TimeManagement.App.LabelListChange() : null;
                 },
                 UpdateLabels: function () {
-                    var $t, $t1;
                     TimeManagement.App.Labels = System.Linq.Enumerable.from(TimeManagement.App.Tasks, TimeManagement.Task).selectMany($asm.$.TimeManagement.App.f8).distinct().toList(System.String);
-                    TimeManagement.App.labelList.innerHTML = "";
-                    $t = Bridge.getEnumerator(System.Linq.Enumerable.from(TimeManagement.App.Labels, System.String).orderBy($asm.$.TimeManagement.App.f9));
-                    try {
-                        while ($t.moveNext()) {
-                            var label = $t.Current;
-                            TimeManagement.Extensions.Add(HTMLDataListElement, TimeManagement.App.labelList, [($t1 = document.createElement("option"), $t1.value = label, $t1)]);
-                        }
-                    } finally {
-                        if (Bridge.is($t, System.IDisposable)) {
-                            $t.System$IDisposable$Dispose();
-                        }
-                    }
                 },
                 TaskList: function () {
                     var $t, $t1;
@@ -209,7 +196,7 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                     var table = ((e, c) => c.appendChild(e))(TimeManagement.Extensions.Add(HTMLTableElement, document.createElement("table"), [TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, document.createElement("tr"), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Task Name"])]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Time So Far"])]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Money (CAD)"])]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Task Status"])]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Labels"])]), [TimeManagement.App.editButtons ? TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Edit"]) : null]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["$/hour"])]), [TimeManagement.App.editButtons ? TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Remove"]) : null])]), div);
                     var tasks = TimeManagement.App.Tasks;
                     if (TimeManagement.App.filterLabelList.Labels.Count > 0) {
-                        tasks = System.Linq.Enumerable.from(tasks, TimeManagement.Task).where($asm.$.TimeManagement.App.f10);
+                        tasks = System.Linq.Enumerable.from(tasks, TimeManagement.Task).where($asm.$.TimeManagement.App.f9);
                     }
                     var taskState = new TimeManagement.TaskState();
                     if (((taskState = Bridge.is(TimeManagement.Extensions.Value(TimeManagement.TaskState, TimeManagement.App.filterTaskStatus), System.Int32) ? System.Nullable.getValue(TimeManagement.Extensions.Value(TimeManagement.TaskState, TimeManagement.App.filterTaskStatus)) : null)) != null) {
@@ -299,8 +286,8 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
             TimeManagement.MenuElementExtensions.Show(TimeManagement.App.addTask);
         },
         f2: function () {
-            var $t1;
-            return TimeManagement.Extensions.AddUl(HTMLDivElement, document.createElement("div"), [TimeManagement.Extensions.Add(HTMLAnchorElement, ($t1 = document.createElement("a"), $t1.href = "javascript:void(0)", $t1.onclick = $asm.$.TimeManagement.App.f1, $t1), ["+ New Task"])]);
+            var $t;
+            return TimeManagement.Extensions.AddUl(HTMLDivElement, document.createElement("div"), [TimeManagement.Extensions.Add(HTMLAnchorElement, ($t = document.createElement("a"), $t.href = "javascript:void(0)", $t.onclick = $asm.$.TimeManagement.App.f1, $t), ["+ New Task"])]);
         },
         f3: function (_) {
             TimeManagement.App.UpdateTaskList();
@@ -324,10 +311,7 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
         f8: function (t) {
             return t.Labels;
         },
-        f9: function (l) {
-            return l;
-        },
-        f10: function (t) {
+        f9: function (t) {
             return System.Linq.Enumerable.from(t.Labels, System.String).any(Bridge.fn.cacheBind(TimeManagement.App.filterLabelList.Labels, TimeManagement.App.filterLabelList.Labels.contains));
         }
     });
@@ -590,15 +574,33 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
     });
 
     Bridge.define("TimeManagement.LabelList", {
+        statics: {
+            fields: {
+                _idCounter: 0
+            },
+            ctors: {
+                init: function () {
+                    this._idCounter = 0;
+                }
+            }
+        },
         fields: {
             Element: null,
             Form: null,
             SubmitButton: null,
             LabelInput: null,
             LabelsUL: null,
+            list: null,
             Labels: null,
             Flexible: false,
             OnLabelListChange: null
+        },
+        props: {
+            List: {
+                get: function () {
+                    return this.Flexible ? Bridge.cast(this.list, HTMLElement) : this.LabelInput;
+                }
+            }
         },
         ctors: {
             init: function () {
@@ -606,12 +608,17 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
             },
             ctor: function (flexible, slot) {
                 if (slot === void 0) { slot = null; }
+                var $t, $t1;
 
                 this.$initialize();
                 this.Flexible = flexible;
+                if (this.Flexible) {
+                    this.list = document.body.appendChild(($t = document.createElement("datalist"), $t.id = "_0" + Bridge.identity(TimeManagement.LabelList._idCounter, (($t1 = (TimeManagement.LabelList._idCounter + 1) | 0, TimeManagement.LabelList._idCounter = $t1, $t1))), $t));
+                }
                 this.Element = slot || document.createElement("div");
                 this.Rerender();
                 this.LabelListChange();
+                TimeManagement.App.addLabelListChange(Bridge.fn.bind(this, $asm.$.TimeManagement.LabelList.f1));
             }
         },
         methods: {
@@ -619,9 +626,9 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                 var $t;
                 this.Element.innerHTML = "";
                 this.LabelsUL = ((e, c) => c.appendChild(e))(document.createElement("ul"), this.Element);
-                this.Form = ($t = document.createElement("form"), $t.onsubmit = Bridge.fn.bind(this, $asm.$.TimeManagement.LabelList.f1), $t);
-                this.LabelInput = ((e, c) => c.appendChild(e))((this.Flexible ? (e => (e.setAttribute('list', TimeManagement.App.labelListID), e))(($t = document.createElement("input"), $t.required = true, $t)) : ($t = document.createElement("select"), $t.required = true, $t.oninput = Bridge.fn.bind(this, $asm.$.TimeManagement.LabelList.f2), $t)), this.Form);
-                this.SubmitButton = ((e, c) => c.appendChild(e))(TimeManagement.Extensions.Add(HTMLButtonElement, document.createElement("button"), ["+"]), this.Form);
+                this.Form = ($t = document.createElement("form"), $t.onsubmit = Bridge.fn.bind(this, $asm.$.TimeManagement.LabelList.f2), $t);
+                this.LabelInput = ((e, c) => c.appendChild(e))((this.Flexible ? (e => (e.setAttribute('list', this.list.id), e))(($t = document.createElement("input"), $t.required = true, $t.oninput = Bridge.fn.bind(this, $asm.$.TimeManagement.LabelList.f3), $t)) : ($t = document.createElement("select"), $t.required = true, $t.oninput = Bridge.fn.bind(this, $asm.$.TimeManagement.LabelList.f4), $t)), this.Form);
+                this.SubmitButton = ((e, c) => c.appendChild(e))(TimeManagement.Extensions.Add(HTMLButtonElement, ($t = document.createElement("button"), $t.onclick = Bridge.fn.bind(this, $asm.$.TimeManagement.LabelList.f5), $t), ["+"]), this.Form);
                 TimeManagement.Extensions.Add(HTMLUListElement, this.LabelsUL, [TimeManagement.Extensions.Add(HTMLLIElement, document.createElement("li"), [this.Form])]);
                 var labels = this.Labels;
                 this.Labels = new (System.Collections.Generic.List$1(System.String)).ctor();
@@ -638,32 +645,34 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                     }
                 }
             },
-            LabelListChange: function () {
+            LabelListChange: function (callOnLabelListChange) {
                 var $t, $t1;
-                if (this.Flexible) {
-                    return;
-                }
+                if (callOnLabelListChange === void 0) { callOnLabelListChange = false; }
                 var fll = this.LabelInput.value;
+                this.List.innerHTML = "";
+                $t = Bridge.getEnumerator(System.Linq.Enumerable.from(TimeManagement.App.Labels, System.String).except(this.Labels).orderBy($asm.$.TimeManagement.LabelList.f6));
                 try {
-                    this.LabelInput.innerHTML = "";
-                    $t = Bridge.getEnumerator(System.Linq.Enumerable.from(TimeManagement.App.Labels, System.String).except(this.Labels).orderBy($asm.$.TimeManagement.LabelList.f3));
-                    try {
-                        while ($t.moveNext()) {
-                            var label = $t.Current;
-                            TimeManagement.Extensions.Add(HTMLInputElement, this.LabelInput, [TimeManagement.Extensions.Add(HTMLOptionElement, ($t1 = document.createElement("option"), $t1.value = label, $t1), [label])]);
+                    while ($t.moveNext()) {
+                        var label = $t.Current;
+                        var opt = ($t1 = document.createElement("option"), $t1.value = label, $t1);
+                        if (!this.Flexible) {
+                            TimeManagement.Extensions.Add(HTMLOptionElement, opt, [label]);
                         }
-                    } finally {
-                        if (Bridge.is($t, System.IDisposable)) {
-                            $t.System$IDisposable$Dispose();
-                        }
+                        TimeManagement.Extensions.Add(HTMLElement, this.List, [opt]);
                     }
-                    if (this.Labels.RemoveAll($asm.$.TimeManagement.LabelList.f4) === 0) {
-                        return;
-                    }
-                    this.Rerender();
                 } finally {
+                    if (Bridge.is($t, System.IDisposable)) {
+                        $t.System$IDisposable$Dispose();
+                    }
+                }
+                if (!this.Flexible) {
+                    if (this.Labels.RemoveAll($asm.$.TimeManagement.LabelList.f7) > 0) {
+                        this.Rerender();
+                    }
                     this.LabelInput.value = fll;
-                    !Bridge.staticEquals(this.OnLabelListChange, null) ? this.OnLabelListChange() : null;
+                    if (callOnLabelListChange) {
+                        !Bridge.staticEquals(this.OnLabelListChange, null) ? this.OnLabelListChange() : null;
+                    }
                 }
             }
         }
@@ -672,7 +681,10 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
     Bridge.ns("TimeManagement.LabelList", $asm.$);
 
     Bridge.apply($asm.$.TimeManagement.LabelList, {
-        f1: function (e) {
+        f1: function () {
+            this.LabelListChange(true);
+        },
+        f2: function (e) {
             var $t1;
             e.preventDefault();
 
@@ -682,18 +694,28 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                 this.LabelsUL.removeChild(_.target);
                 this.Labels.remove(adding);
                 this.LabelListChange();
+                !Bridge.staticEquals(this.OnLabelListChange, null) ? this.OnLabelListChange() : null;
             }), $t1), [adding]), this.LabelsUL.lastElementChild);
             this.LabelInput.value = "";
             this.LabelInput.focus();
             this.LabelListChange();
+            !Bridge.staticEquals(this.OnLabelListChange, null) ? this.OnLabelListChange() : null;
         },
-        f2: function (_) {
+        f3: function (_) {
+            if (TimeManagement.App.Labels.contains(this.LabelInput.value)) {
+                this.SubmitButton.click();
+            }
+        },
+        f4: function (_) {
             this.SubmitButton.click();
         },
-        f3: function (l) {
+        f5: function (_) {
+            (e => (e.setCustomValidity(""), e.reportValidity(), e))(this.SubmitButton);
+        },
+        f6: function (l) {
             return l;
         },
-        f4: function (label1) {
+        f7: function (label1) {
             return !TimeManagement.App.Labels.contains(label1);
         }
     });

@@ -177,6 +177,9 @@ namespace TimeManagement
         public HTMLButtonElement SubmitButton;
         public HTMLInputElement LabelInput;
         public HTMLUListElement LabelsUL;
+        public static int _idCounter = 0;
+        public HTMLDataListElement list;
+        public HTMLElement List => Flexible ? (HTMLElement)list : LabelInput;
 
         public List<string> Labels = new List<string>();
         public bool Flexible;
@@ -186,9 +189,11 @@ namespace TimeManagement
         public LabelList(bool flexible, HTMLDivElement slot = null)
         {
             Flexible = flexible;
+            if (Flexible) list = Document.Body.AppendChild<HTMLDataListElement>(new HTMLDataListElement { Id = "_0" + _idCounter++ });
             Element = slot ?? new HTMLDivElement();
             Rerender();
             LabelListChange();
+            App.LabelListChange += () => LabelListChange(callOnLabelListChange: true);
         }
 
         public void Rerender ()
@@ -212,6 +217,7 @@ namespace TimeManagement
                                 LabelsUL.RemoveChild(_.Target);
                                 Labels.Remove(adding);
                                 LabelListChange();
+                                OnLabelListChange?.Invoke();
                             }
                         }.Add(adding),
                         LabelsUL.LastElementChild
@@ -219,14 +225,15 @@ namespace TimeManagement
                     LabelInput.Value = "";
                     LabelInput.Focus();
                     LabelListChange();
+                    OnLabelListChange?.Invoke();
                 }
             };
             LabelInput =
                 (Flexible
-                    ? new HTMLInputElement { Required = true }.SetDataList(labelListID)
+                    ? new HTMLInputElement { Required = true, OnInput = _ => { if (App.Labels.Contains(LabelInput.Value)) SubmitButton.Click(); } }.SetDataList(list.Id)
                     : new HTMLSelectElement { Required = true, OnInput = _ => SubmitButton.Click() }.As<HTMLInputElement>()
                 ).AddTo(Form);
-            SubmitButton = new HTMLButtonElement().Add("+").AddTo(Form);
+            SubmitButton = new HTMLButtonElement { OnClick = _ => SubmitButton.SetCustomValidity("") }.Add("+").AddTo(Form);
             LabelsUL.Add(new HTMLLIElement().Add(Form));
             var labels = Labels;
             Labels = new List<string>();
@@ -237,22 +244,22 @@ namespace TimeManagement
             }
         }
 
-        public void LabelListChange ()
+        public void LabelListChange (bool callOnLabelListChange = false)
         {
-            if (Flexible) return;
             string fll = LabelInput.Value;
-            try
+            List.InnerHTML = "";
+            foreach (string label in App.Labels.Except(this.Labels).OrderBy(l => l))
             {
-                LabelInput.InnerHTML = "";
-                foreach (string label in App.Labels.Except(this.Labels).OrderBy(l => l))
-                    LabelInput.Add(new HTMLOptionElement { Value = label }.Add(label));
-                if (this.Labels.RemoveAll(label => !App.Labels.Contains(label)) == 0) return;
-                Rerender();
+                HTMLOptionElement opt = new HTMLOptionElement { Value = label };
+                if (!Flexible) opt.Add(label);
+                List.Add(opt);
             }
-            finally
+            if (!Flexible)
             {
+                if (this.Labels.RemoveAll(label => !App.Labels.Contains(label)) > 0) Rerender();
                 LabelInput.Value = fll;
-                OnLabelListChange?.Invoke();
+                if (callOnLabelListChange)
+                    OnLabelListChange?.Invoke();
             }
         }
     }
@@ -395,7 +402,7 @@ namespace TimeManagement
         public static List<HideableElement> MenuElements = new List<HideableElement>();
         public static List<Task> Tasks = new List<Task>();
         public static List<string> Labels = new List<string>();
-        public static HTMLDataListElement labelList;
+        public static event Action LabelListChange;
         public static LabelList filterLabelList;
         public static HTMLSelectElement filterTaskStatus;
         public const string labelListID = "labelList";
@@ -438,15 +445,12 @@ namespace TimeManagement
         {
             Global.LocalStorage.SetItem("tasks", JsonConvert.SerializeObject(Tasks));
             UpdateLabels();
-            filterLabelList.LabelListChange();
+            LabelListChange?.Invoke();
         }
 
         public static void UpdateLabels()
         {
             Labels = Tasks.SelectMany(t => t.Labels).Distinct().ToList();
-            labelList.InnerHTML = "";
-            foreach (string label in Labels.OrderBy(l => l))
-                labelList.Add(new HTMLOptionElement { Value = label });
         }
 
         static HTMLDivElement TaskList()
@@ -555,7 +559,6 @@ namespace TimeManagement
         {
             Document.Head.AppendChild(new HTMLStyleElement().Add("th, td { text-align:center; border: 1px solid black }"));
 
-            labelList = new HTMLDataListElement { Id = labelListID }.AddTo(Document.Body);
             if (Global.LocalStorage.GetItem("tasks") is string serialized)
                 Tasks = JsonConvert.DeserializeObject<List<Task>>(serialized);
             UpdateLabels();
