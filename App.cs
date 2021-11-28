@@ -461,6 +461,7 @@ namespace TimeManagement
                     .Add(new HTMLTableHeaderCellElement().Add("Labels"))
                     .Add(editButtons ? new HTMLTableHeaderCellElement().Add("Edit") : null)
                     .Add(new HTMLTableHeaderCellElement().Add("$/hour"))
+                    .Add(editButtons ? new HTMLTableHeaderCellElement().Add("Remove") : null)
                 ).AddTo(div);
             IEnumerable<Task> tasks = Tasks;
             if (filterLabelList.Labels.Count > 0)
@@ -489,6 +490,15 @@ namespace TimeManagement
                         task.MoneyAmount is decimal money && task.TimeSoFar.Ticks > 0 && task.IsComplete
                             ? ((double)(money * InCAD[task.MoneyCurrency]) / task.TimeSoFar.TotalHours).ToString("0")
                             : ""))
+                    .Add(editButtons ? new HTMLTableDataCellElement().Add(new HTMLAnchorElement
+                    {
+                        Href = "javascript:void(0)",
+                        OnClick = _ =>
+                        {
+                            Tasks.Remove(task);
+                            TasksEdited();
+                        }
+                    }.Add("Remove")) : null)
                 );
             }
             return div;
