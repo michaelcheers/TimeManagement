@@ -17,6 +17,7 @@ namespace TimeManagement
         // Summary:
         //     Is a DOMString containing a name used to refer to this cell in other context.
         //     It reflects the abbr attribute.
+        [Name("abbr")]
         public string Abbr;
 
         //
@@ -26,6 +27,7 @@ namespace TimeManagement
         //     values: "row", "col", "colgroup", or "rowgroup". If the attribute is in the auto
         //     state, or if an invalid value is set for the attribute, scope will be returns
         //     the empty string, "".
+        [Name("scope")]
         public TableHeaderCellScope Scope;
 
         [Template("document.createElement(\"th\")")]
@@ -47,4 +49,6 @@ namespace TimeManagement
     }
 }
 
-// Other Issues: Default values in local functions don't seem to work
+// Other Issues:
+// - Default values in local functions don't seem to work
+// - Nested local functions don't work

@@ -606,17 +606,24 @@ namespace TimeManagement
                 Href = "javascript:void(0)",
                 OnClick = _ =>
                 {
-                    ExportToCSV($"Time Information ({DateTime.Now:MMMM d, yyyy}).csv", Tasks.Select((t, i) =>
-                        new string[]
-                        {
-                            t.TaskName,
-                            t.TimeSoFar.TotalHours.ToString(),
-                            (t.MoneyAmount * InCAD[t.MoneyCurrency]).ToString(),
-                            t.State.ToCamelString(),
-                            string.Join("\n", t.Labels),
-                            $"=$C{i + 2}/$B{i + 2}"
-                        }
-                    ).Prepend(new[] { "Task Name", "Hours Spent", "Money (CAD)", "Task Status", "Labels", "$/hour" }).ToArray());
+                    ExportToCSV(
+                        $"Time Information ({DateTime.Now:MMMM d, yyyy}).csv",
+                        Tasks.Where(t => t.MoneyAmount != null && t.TimeSoFar.Ticks > 0 && t.State == TaskState.Complete)
+                        .Select
+                        (
+                            (Task t, int i) => new string[]
+                            {
+                                t.TaskName,
+                                t.TimeSoFar.TotalHours.ToString(),
+                                (t.MoneyAmount * InCAD[t.MoneyCurrency]).ToString(),
+                                t.State.ToCamelString(),
+                                string.Join("\n", t.Labels),
+                                i == 0 ? $"=ArrayFormula($C$2:$C${Tasks.Count + 1}/$B$2:$B${Tasks.Count + 1})" : ""
+                            }
+                        )
+                        .Prepend(new[] { "Task Name", "Hours Spent", "Money (CAD)", "Task Status", "Labels", "$/hour" })
+                        .ToArray()
+                    );
                 }
             }.Add("CSV Export").AddToBody();
         }

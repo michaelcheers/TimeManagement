@@ -127,7 +127,7 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
             TimeManagement.App.editButtons = true;
             TimeManagement.App.UpdateTaskList();
             TimeManagement.Extensions.AddToBody(HTMLBRElement, document.createElement("br"));
-            TimeManagement.Extensions.AddToBody(HTMLAnchorElement, TimeManagement.Extensions.Add(HTMLAnchorElement, ($t2 = document.createElement("a"), $t2.href = "javascript:void(0)", $t2.onclick = $asm.$.TimeManagement.App.f5, $t2), ["CSV Export"]));
+            TimeManagement.Extensions.AddToBody(HTMLAnchorElement, TimeManagement.Extensions.Add(HTMLAnchorElement, ($t2 = document.createElement("a"), $t2.href = "javascript:void(0)", $t2.onclick = $asm.$.TimeManagement.App.f6, $t2), ["CSV Export"]));
         },
         statics: {
             fields: {
@@ -154,7 +154,7 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                     this.MenuElements = new (System.Collections.Generic.List$1(TimeManagement.HideableElement)).ctor();
                     this.Tasks = new (System.Collections.Generic.List$1(TimeManagement.Task)).ctor();
                     this.Labels = new (System.Collections.Generic.List$1(System.String)).ctor();
-                    this.InCAD = $asm.$.TimeManagement.App.f6(new (System.Collections.Generic.Dictionary$2(TimeManagement.Currency,System.Decimal)).ctor());
+                    this.InCAD = $asm.$.TimeManagement.App.f7(new (System.Collections.Generic.Dictionary$2(TimeManagement.Currency,System.Decimal)).ctor());
                 }
             },
             methods: {
@@ -179,7 +179,7 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                             $t.System$IDisposable$Dispose();
                         }
                     }
-                    outValue.v = System.TimeSpan.fromSeconds(System.Linq.Enumerable.from(splitParsed, System.Int32).zip(System.Array.init([1, 60, 3600], System.Int32), $asm.$.TimeManagement.App.f7).sum());
+                    outValue.v = System.TimeSpan.fromSeconds(System.Linq.Enumerable.from(splitParsed, System.Int32).zip(System.Array.init([1, 60, 3600], System.Int32), $asm.$.TimeManagement.App.f8).sum());
                     return true;
                 },
                 TasksEdited: function () {
@@ -188,7 +188,7 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                     !Bridge.staticEquals(TimeManagement.App.LabelListChange, null) ? TimeManagement.App.LabelListChange() : null;
                 },
                 UpdateLabels: function () {
-                    TimeManagement.App.Labels = System.Linq.Enumerable.from(TimeManagement.App.Tasks, TimeManagement.Task).selectMany($asm.$.TimeManagement.App.f8).distinct().toList(System.String);
+                    TimeManagement.App.Labels = System.Linq.Enumerable.from(TimeManagement.App.Tasks, TimeManagement.Task).selectMany($asm.$.TimeManagement.App.f9).distinct().toList(System.String);
                 },
                 TaskList: function () {
                     var $t, $t1;
@@ -196,7 +196,7 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                     var table = ((e, c) => c.appendChild(e))(TimeManagement.Extensions.Add(HTMLTableElement, document.createElement("table"), [TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, TimeManagement.Extensions.Add(HTMLTableRowElement, document.createElement("tr"), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Task Name"])]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Time So Far"])]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Money (CAD)"])]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Task Status"])]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Labels"])]), [TimeManagement.App.editButtons ? TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Edit"]) : null]), [TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["$/hour"])]), [TimeManagement.App.editButtons ? TimeManagement.Extensions.Add(HTMLTableCellElement, document.createElement("th"), ["Remove"]) : null])]), div);
                     var tasks = TimeManagement.App.Tasks;
                     if (TimeManagement.App.filterLabelList.Labels.Count > 0) {
-                        tasks = System.Linq.Enumerable.from(tasks, TimeManagement.Task).where($asm.$.TimeManagement.App.f9);
+                        tasks = System.Linq.Enumerable.from(tasks, TimeManagement.Task).where($asm.$.TimeManagement.App.f10);
                     }
                     var taskState = new TimeManagement.TaskState();
                     if (((taskState = Bridge.is(TimeManagement.Extensions.Value(TimeManagement.TaskState, TimeManagement.App.filterTaskStatus), System.Int32) ? System.Nullable.getValue(TimeManagement.Extensions.Value(TimeManagement.TaskState, TimeManagement.App.filterTaskStatus)) : null)) != null) {
@@ -292,26 +292,29 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
         f3: function (_) {
             TimeManagement.App.UpdateTaskList();
         },
-        f4: function (t, i) {
-            return System.Array.init([t.TaskName, System.Double.format(t.TimeSoFar.getTotalHours()), (System.Nullable.lift2("mul", t.MoneyAmount, TimeManagement.App.InCAD.getItem(t.MoneyCurrency))).toString(), TimeManagement.Extensions.ToCamelString(TimeManagement.TaskState, t.State), Bridge.toArray(t.Labels).join("\n"), System.String.format("=$C{0}/$B{1}", Bridge.box(((i + 2) | 0), System.Int32), Bridge.box(((i + 2) | 0), System.Int32))], System.String);
+        f4: function (t) {
+            return System.Nullable.liftne("ne", t.MoneyAmount, System.Decimal.lift(null)) && t.TimeSoFar.getTicks().gt(System.Int64(0)) && t.State === TimeManagement.TaskState.Complete;
         },
-        f5: function (_) {
+        f5: function (t, i) {
+            return System.Array.init([t.TaskName, System.Double.format(t.TimeSoFar.getTotalHours()), (System.Nullable.lift2("mul", t.MoneyAmount, TimeManagement.App.InCAD.getItem(t.MoneyCurrency))).toString(), TimeManagement.Extensions.ToCamelString(TimeManagement.TaskState, t.State), Bridge.toArray(t.Labels).join("\n"), i === 0 ? System.String.format("=ArrayFormula($C$2:$C${0}/$B$2:$B${1})", Bridge.box(((TimeManagement.App.Tasks.Count + 1) | 0), System.Int32), Bridge.box(((TimeManagement.App.Tasks.Count + 1) | 0), System.Int32)) : ""], System.String);
+        },
+        f6: function (_) {
             var $t3;
-            TimeManagement.App.ExportToCSV(System.String.format("Time Information ({0:MMMM d, yyyy}).csv", [Bridge.box(System.DateTime.getNow(), System.DateTime, System.DateTime.format)]), ($t3 = System.Array.type(System.String), System.Linq.Enumerable.from(TimeManagement.Enumerable.Prepend(System.Array.type(System.String), System.Linq.Enumerable.from(TimeManagement.App.Tasks, TimeManagement.Task).select($asm.$.TimeManagement.App.f4), System.Array.init(["Task Name", "Hours Spent", "Money (CAD)", "Task Status", "Labels", "$/hour"], System.String)), $t3).ToArray($t3)));
+            TimeManagement.App.ExportToCSV(System.String.format("Time Information ({0:MMMM d, yyyy}).csv", [Bridge.box(System.DateTime.getNow(), System.DateTime, System.DateTime.format)]), ($t3 = System.Array.type(System.String), System.Linq.Enumerable.from(TimeManagement.Enumerable.Prepend(System.Array.type(System.String), System.Linq.Enumerable.from(TimeManagement.App.Tasks, TimeManagement.Task).where($asm.$.TimeManagement.App.f4).select($asm.$.TimeManagement.App.f5), System.Array.init(["Task Name", "Hours Spent", "Money (CAD)", "Task Status", "Labels", "$/hour"], System.String)), $t3).ToArray($t3)));
         },
-        f6: function (_o1) {
+        f7: function (_o1) {
             _o1.setItem(TimeManagement.Currency.CAD, System.Decimal(1));
             _o1.setItem(TimeManagement.Currency.USD, System.Decimal(1.22955, 5));
             _o1.setItem(TimeManagement.Currency.EUR, System.Decimal(1.39870, 5));
             return _o1;
         },
-        f7: function (p1, mul) {
+        f8: function (p1, mul) {
             return Bridge.Int.mul(p1, mul);
         },
-        f8: function (t) {
+        f9: function (t) {
             return t.Labels;
         },
-        f9: function (t) {
+        f10: function (t) {
             return System.Linq.Enumerable.from(t.Labels, System.String).any(Bridge.fn.cacheBind(TimeManagement.App.filterLabelList.Labels, TimeManagement.App.filterLabelList.Labels.contains));
         }
     });

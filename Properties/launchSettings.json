@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "TimeManagement": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "file:///C:/Users/micha/source/repos/TimeManagement/bin/Debug/net48/bridge/index.html"
+    }
+  }
+}
