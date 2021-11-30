@@ -375,7 +375,7 @@ namespace TimeManagement
                 heading.InnerHTML = "";
                 heading.Add(t is Task ? "Edit a Task" : "Add a Task");
                 submitButton.InnerHTML = "";
-                submitButton.Add(t is Task ? "Edit Task" : "Add Task");
+                submitButton.Add(t is Task ? "Save Changes" : "Add Task");
                 t = (editing = t) ?? new Task { TaskName = "" };
                 taskName.Value = t.TaskName;
                 playPauseButton.times = t.TimeSoFar.Ticks == 0

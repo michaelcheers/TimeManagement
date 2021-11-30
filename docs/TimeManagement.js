@@ -59,7 +59,7 @@ Bridge.assembly("TimeManagement", function ($asm, globals) {
                         heading.innerHTML = "";
                         TimeManagement.Extensions.Add(HTMLHeadingElement, heading, [Bridge.hasValue(t) ? "Edit a Task" : "Add a Task"]);
                         submitButton.innerHTML = "";
-                        TimeManagement.Extensions.Add(HTMLButtonElement, submitButton, [Bridge.hasValue(t) ? "Edit Task" : "Add Task"]);
+                        TimeManagement.Extensions.Add(HTMLButtonElement, submitButton, [Bridge.hasValue(t) ? "Save Changes" : "Add Task"]);
                         t = ((editing = t)) || ($t1 = new TimeManagement.Task(), $t1.TaskName = "", $t1);
                         taskName.value = t.TaskName;
                         playPauseButton.times = t.TimeSoFar.getTicks().equals(System.Int64(0)) ? System.Array.init(0, 0, System.Double) : System.Array.init([Date.now() - t.TimeSoFar.getTotalMilliseconds(), Date.now()], System.Double);
